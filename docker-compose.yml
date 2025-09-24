@@ -1,0 +1,40 @@
+services:
+  # Production configuration
+  prod:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - PYTHONPATH=/app
+      - PYTHONPYCACHEPREFIX=""
+      - PYTHONDONTWRITEBYTECODE=1
+      - DEBUG=false
+    restart: unless-stopped
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+
+  # Development configuration
+  dev:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - PYTHONPATH=/app   
+      - PYTHONPYCACHEPREFIX=/app/__pycache__
+      - DEBUG=true
+    volumes:
+      - .:/app
+    # (main:) refers to the main.py – (app) refers to the app variable in the main.py file
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Test configuration
+  test:
+    build: .
+    environment:
+      - ENVIRONMENT=test
+      - PYTHONPATH=/app
+      - PYTHONPYCACHEPREFIX=/app/__pycache__
+    volumes:
+      - .:/app
+    command: python -m pytest src/tests/ 

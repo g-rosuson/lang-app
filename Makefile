@@ -7,13 +7,13 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 dev: ## Start development environment
-	docker-compose -f docker-compose.dev.yml up --build
+	docker-compose up dev --build
 
 prod: ## Start production environment
-	docker-compose -f docker-compose.prod.yml up --build
+	docker-compose up prod --build
 
 test: ## Run tests
-	docker-compose -f docker-compose.test.yml run --rm lang-app python -m pytest
+	docker-compose run --rm test python -m pytest
 
 clean: ## Clean up containers and images
 	docker-compose down --rmi all --volumes --remove-orphans
