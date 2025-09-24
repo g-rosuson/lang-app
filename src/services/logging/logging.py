@@ -192,6 +192,8 @@ def get_logger(moduleName: str) -> logging.Logger:
     way to get loggers throughout the application.
     """
 
+    # Configures the global root logger
     __get_logging_for_environment()
 
+    # Get child logger from global root logger
     return logging.getLogger(moduleName)
