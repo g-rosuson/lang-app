@@ -1,9 +1,7 @@
 """Configuration barrel file - exports all config modules"""
 
-from .models import DE_MD_SPACY_MODEL_NAME, DE_STANZA_LANGUAGE_NAME, STANZA_PROCESSORS
+from .settings import settings
 
 __all__ = [
-    "DE_MD_SPACY_MODEL_NAME",
-    "DE_STANZA_LANGUAGE_NAME",
-    "STANZA_PROCESSORS",
+    "settings",
 ]

@@ -1,20 +1,13 @@
 """Language processing endpoints."""
 from fastapi import APIRouter, HTTPException
+from src.config import settings
 
 router = APIRouter()
 
 @router.get("/languages")
 async def get_supported_languages():
     """Get list of supported languages."""
-    return {
-        "languages": [
-            {"code": "en", "name": "English"},
-            {"code": "es", "name": "Spanish"},
-            {"code": "fr", "name": "French"},
-            {"code": "de", "name": "German"},
-            {"code": "it", "name": "Italian"}
-        ]
-    }
+    return {"languages": settings.supported_languages}
 
 @router.post("/analyze")
 async def analyze_text(text: str):
