@@ -7,7 +7,7 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 dev: ## Start development environment
-	docker-compose up dev --build
+	docker-compose up dev
 
 prod: ## Start production environment
 	docker-compose up prod --build
