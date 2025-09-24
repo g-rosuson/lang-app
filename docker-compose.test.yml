@@ -1,0 +1,10 @@
+services:
+  api:
+    build: .
+    environment:
+      - ENVIRONMENT=test
+      - PYTHONPATH=/app
+      - PYTHONPYCACHEPREFIX=/app/__pycache__
+    volumes:
+      - .:/app
+    command: python -m pytest src/tests/ 
