@@ -49,7 +49,7 @@ COPY requirements .
 RUN pip install --no-cache-dir -r requirements
 
 # Download and cache German models during build
-RUN python -m spacy download de_core_news_lg
+RUN python -m spacy download de_core_news_md
 RUN python -c "import stanza; stanza.download('de')"
 
 # # Copy custom models
