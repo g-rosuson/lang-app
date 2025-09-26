@@ -68,9 +68,9 @@ class LanguageAnalysisPipeline:
         
         try:
             # Load models in sequence
-            self._load_spacy_model()
-            self._load_stanza_model()
-            self._load_spellchecker_model()
+            self.__load_spacy_model()
+            self.__load_stanza_model()
+            self.__load_spellchecker_model()
             
             self._is_initialized = True
             logger.info("Language analysis pipeline initialized successfully")
@@ -239,7 +239,7 @@ class LanguageAnalysisPipeline:
             logger.error(f"Pipeline cleanup failed: {e}")
     
     # Private methods for model loading
-    def _load_spacy_model(self) -> None:
+    def __load_spacy_model(self) -> None:
         """Load SpaCy model."""
         try:
             self.spacy_processor.load_model()
@@ -248,7 +248,7 @@ class LanguageAnalysisPipeline:
             logger.error(f"Failed to load SpaCy model: {e}")
             raise
     
-    def _load_stanza_model(self) -> None:
+    def __load_stanza_model(self) -> None:
         """Load Stanza model."""
         try:
             self.stanza_processor.load_model()
@@ -257,7 +257,7 @@ class LanguageAnalysisPipeline:
             logger.error(f"Failed to load Stanza model: {e}")
             raise
     
-    def _load_spellchecker_model(self) -> None:
+    def __load_spellchecker_model(self) -> None:
         """Load spell checker model."""
         try:
             self.spell_checker.load_model()

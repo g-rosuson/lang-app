@@ -146,7 +146,7 @@ class PerformanceMonitor:
         if len(self.component_times[component]) > 100:
             self.component_times[component] = self.component_times[component][-100:]
     
-    def get_system_resources(self) -> Dict[str, Any]:
+    def __get_system_resources(self) -> Dict[str, Any]:
         """
         Get current system resource usage.
         
@@ -179,7 +179,7 @@ class PerformanceMonitor:
             logger.warning(f"Failed to get system resources: {e}")
             return {"error": str(e)}
     
-    def get_component_stats(self) -> Dict[str, Any]:
+    def __get_component_stats(self) -> Dict[str, Any]:
         """
         Get statistics for each processing component.
         
@@ -208,7 +208,7 @@ class PerformanceMonitor:
         
         return stats
     
-    def get_recent_requests(self, count: int = 10) -> List[Dict[str, Any]]:
+    def __get_recent_requests(self, count: int = 10) -> List[Dict[str, Any]]:
         """
         Get recent request metrics.
         
@@ -263,9 +263,9 @@ class PerformanceMonitor:
                 "misses": self.metrics.cache_misses,
                 "hit_rate_percent": round(cache_hit_rate, 2)
             },
-            "components": self.get_component_stats(),
-            "system": self.get_system_resources(),
-            "recent_requests": self.get_recent_requests(5)
+            "components": self.__get_component_stats(),
+            "system": self.__get_system_resources(),
+            "recent_requests": self.__get_recent_requests(5)
         }
     
     def reset_metrics(self) -> None:

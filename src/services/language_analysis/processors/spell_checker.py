@@ -78,7 +78,7 @@ class SpellCheckerProcessor:
             start_time = time.time()
             
             # Split text into words and clean them
-            words = self.extract_words(text)
+            words = self.__extract_words(text)
             if not words:
                 return SpellCheckSummary(
                     misspelled_words={},
@@ -212,7 +212,7 @@ class SpellCheckerProcessor:
             logger.error(f"Spelling correctness check failed: {e}")
             return True  # Assume correct on error
     
-    def extract_words(self, text: str) -> List[str]:
+    def __extract_words(self, text: str) -> List[str]:
         """
         Extract words from text for spell checking.
         
