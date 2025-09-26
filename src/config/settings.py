@@ -1,6 +1,6 @@
 """Application settings using Pydantic Settings."""
 from pydantic_settings import BaseSettings
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 
 class Settings(BaseSettings):
@@ -25,10 +25,26 @@ class Settings(BaseSettings):
         {"code": "it", "name": "Italian"}
     ]
     
-    # NLP Model configuration
-    de_md_spacy_model_name: str = "de_core_news_md"
-    de_stanza_language_name: str = "de"
+    # Language Analysis Pipeline Configuration
+    language_analysis_enabled: bool = True
+    max_text_length: int = 10000
+    default_language: str = "de"
+    
+    # SpaCy Configuration
+    spacy_model: str = "de_core_news_md"
+    
+    # Stanza Configuration
+    stanza_language: str = "de"
     stanza_processors: str = "tokenize,mwt,pos,lemma,depparse"
+    stanza_model_dir: Optional[str] = None
+    use_gpu: bool = False
+    
+    # Spell Checker Configuration
+    spellcheck_language: str = "de"
+    
+    # Performance Configuration
+    pipeline_timeout_seconds: int = 30
+    enable_parallel_processing: bool = False
     
     model_config = {
         "env_file": ".env",
