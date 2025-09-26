@@ -3,6 +3,12 @@ Spell Checker Processor
 
 This module provides German spell checking functionality using PySpellChecker
 with misspelled word detection and correction suggestions.
+
+IMPORTANT LIMITATIONS:
+- PySpellChecker's German dictionary is less comprehensive than English/Spanish/French
+- Many misspelled words will be detected but have no correction suggestions
+- This is a known limitation of the PySpellChecker library, not a bug in our code
+- For production use, consider alternatives like 'enchant' with aspell/hunspell backends
 """
 
 import time
@@ -96,6 +102,11 @@ class SpellCheckerProcessor:
                 candidates = self.spell.candidates(word)
                 if candidates:
                     misspelled_words[word] = list(candidates)
+                else:
+                    # Word is misspelled but no correction candidates available
+                    # This is a known limitation of PySpellChecker's German dictionary
+                    # which is less comprehensive than English/Spanish/French dictionaries
+                    misspelled_words[word] = []
             
             # Calculate statistics
             total_words = len(words)
@@ -144,12 +155,11 @@ class SpellCheckerProcessor:
             
             # Get correction candidates
             candidates = self.spell.candidates(clean_word)
-            if not candidates:
-                return None
+            candidate_list = list(candidates) if candidates else []
             
             return SpellCheckResult(
                 word=word,
-                candidates=list(candidates),
+                candidates=candidate_list,
                 confidence=None  # PySpellChecker doesn't provide confidence scores
             )
             
