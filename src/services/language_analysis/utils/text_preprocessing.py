@@ -6,7 +6,7 @@ the language analysis pipeline, without language-specific assumptions.
 """
 
 import re
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from ...logging.logging import get_logger
 
 logger = get_logger(__name__)

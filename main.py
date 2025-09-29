@@ -21,7 +21,6 @@ async def lifespan(app: FastAPI):
             # Create pipeline configuration from settings
             pipeline_config = {
                 "max_text_length": settings.max_text_length,
-                "spacy_model": settings.spacy_model,
                 "stanza_language": settings.stanza_language,
                 "stanza_processors": settings.stanza_processors,
                 "stanza_model_dir": settings.stanza_model_dir,

@@ -2,9 +2,9 @@
 Language Analysis Service
 
 This module provides comprehensive German language analysis capabilities including:
-- Tokenization, POS tagging, and lemmatization (SpaCy)
+- Tokenization, POS tagging, and lemmatization (Stanza)
 - Advanced linguistic analysis and dependency parsing (Stanza)
-- Spell checking and correction suggestions (PySpellChecker)
+- Spell checking and correction suggestions (LanguageTool)
 
 The service follows a modular architecture with individual processors for each
 NLP tool, allowing for flexible and maintainable text analysis.

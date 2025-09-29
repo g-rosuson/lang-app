@@ -1,106 +1,248 @@
 """
 Analysis Result Data Models
 
-This module contains the main Pydantic models for complete language analysis results.
+This module contains Pydantic models for comprehensive language analysis results
+from Stanza (tokenization, POS tagging, lemmatization, morphological analysis, dependency parsing)
+and LanguageTool (grammar and spell checking) that support multiple languages.
 """
 
-from typing import Dict, List, Optional, Any
-from pydantic import BaseModel, Field
+from typing import Dict, List, Optional
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 
-from .token_analysis import TokenAnalysis
-from .spellcheck_result import SpellCheckSummary
-from .pipeline_config import ProcessingStats
+
+class MorphologyFeatures(BaseModel):
+    """Morphological features extracted from Stanza analysis.
+    
+    Features vary by language but commonly include:
+    - Case: Grammatical case (Nom, Acc, Dat, Gen, etc.)
+    - Gender: Grammatical gender (Masc, Fem, Neut, etc.)
+    - Number: Grammatical number (Sing, Plur, etc.)
+    - Tense: Verb tense (Pres, Past, Fut, etc.)
+    - Person: Person (1, 2, 3)
+    - Mood: Verb mood (Ind, Sub, Imp, etc.)
+    - Voice: Verb voice (Act, Pass, etc.)
+    - Degree: Adjective degree (Pos, Comp, Sup, etc.)
+    """
+    
+    # Common morphological features across languages
+    Case: Optional[str] = Field(None, description="Grammatical case")
+    Gender: Optional[str] = Field(None, description="Grammatical gender")
+    Number: Optional[str] = Field(None, description="Grammatical number")
+    Tense: Optional[str] = Field(None, description="Verb tense")
+    Person: Optional[str] = Field(None, description="Person")
+    Mood: Optional[str] = Field(None, description="Verb mood")
+    Voice: Optional[str] = Field(None, description="Verb voice")
+    Degree: Optional[str] = Field(None, description="Adjective degree")
+    
+    # Additional language-specific features
+    additional_features: Dict[str, str] = Field(default_factory=dict, description="Language-specific morphological features")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "Case": "Nom",
+                "Gender": "Masc", 
+                "Number": "Sing",
+                "additional_features": {}
+            }
+        }
+    )
+
+
+class DependencyRelation(BaseModel):
+    """Dependency relation information for a token."""
+    
+    relation: str = Field(..., description="Dependency relation type (e.g., 'det', 'nsubj', 'obj')")
+    headTokenIndex: int = Field(..., description="Index of the head token in the sentence")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "relation": "det",
+                "headTokenIndex": 1
+            }
+        }
+    )
+
+
+class Token(BaseModel):
+    """Token analysis with character positions, POS, lemma, morphology, and dependency info."""
+    
+    text: str = Field(..., description="Original token text")
+    startChar: int = Field(..., description="Start character position in the original text")
+    endChar: int = Field(..., description="End character position in the original text")
+    pos: str = Field(..., description="Universal POS tag (e.g., 'DET', 'NOUN', 'VERB')")
+    lemma: str = Field(..., description="Lemmatized form of the token")
+    morphology: MorphologyFeatures = Field(..., description="Detailed morphological features")
+    dependency: DependencyRelation = Field(..., description="Dependency relation information")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "text": "Der",
+                "startChar": 0,
+                "endChar": 3,
+                "pos": "DET",
+                "lemma": "der",
+                "morphology": {
+                    "Case": "Nom",
+                    "Gender": "Masc",
+                    "Number": "Sing",
+                    "additional_features": {}
+                },
+                "dependency": {
+                    "relation": "det",
+                    "headTokenIndex": 1
+                }
+            }
+        }
+    )
+
+
+class Sentence(BaseModel):
+    """Analysis results for a single sentence."""
+    
+    text: str = Field(..., description="Original sentence text")
+    tokens: List[Token] = Field(..., description="List of token analyses")
+    
+    model_config = ConfigDict(
+        json_schema_extra = {
+            "example": {
+                "text": "Der Lehrer gibt den Schüler das Büch des berühmten Autors.",
+                "tokens": [
+                    {
+                        "text": "Der",
+                        "startChar": 0,
+                        "endChar": 3,
+                        "pos": "DET",
+                        "lemma": "der",
+                        "morphology": {
+                            "Case": "Nom",
+                            "Gender": "Masc",
+                            "Number": "Sing",
+                            "additional_features": {}
+                        },
+                        "dependency": {
+                            "relation": "det",
+                            "headTokenIndex": 1
+                        }
+                    }
+                ]
+            }
+        }
+    )
+
+
+class GrammarError(BaseModel):
+    """Grammar or spell checking error found by LanguageTool."""
+    
+    message: str = Field(..., description="User-friendly error message")
+    startChar: int = Field(..., description="Start character position of the error")
+    endChar: int = Field(..., description="End character position of the error")
+    suggestions: List[str] = Field(..., description="List of correction suggestions")
+    ruleId: str = Field(..., description="Internal rule ID for the error type")
+    
+    model_config = ConfigDict(
+        json_schema_extra = {
+            "example": {
+                "message": "The noun 'Schüler' may require the dative case here.",
+                "startChar": 17,
+                "endChar": 24,
+                "suggestions": ["dem Schüler"],
+                "ruleId": "GERMAN_CASE_AGREEMENT"
+            }
+        }
+    )
 
 
 class AnalysisResult(BaseModel):
-    """Main container for complete language analysis results."""
+    """Complete analysis result from Stanza and LanguageTool matching the required JSON structure.
     
-    # Input information
-    text: str = Field(..., description="Original input text")
-    language: str = Field("de", description="Language of the analysis")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Analysis timestamp")
+    This model supports multiple languages and provides comprehensive linguistic analysis including:
+    - Tokenization with character positions
+    - Part-of-Speech tagging
+    - Lemmatization
+    - Morphological analysis
+    - Dependency parsing
+    - Grammar and spell checking
+    """
     
-    # Analysis results
-    spellcheck: Optional[SpellCheckSummary] = Field(None, description="Spell checking results")
-    spacy_tokens: List[TokenAnalysis] = Field(default_factory=list, description="SpaCy token analysis")
-    stanza_tokens: List[TokenAnalysis] = Field(default_factory=list, description="Stanza token analysis")
+    originalText: str = Field(..., description="Original input text")
+    language: str = Field(..., description="Language code (e.g., 'de', 'en', 'fr', 'es')")
+    sentences: List[Sentence] = Field(..., description="List of sentence analyses")
+    errors: List[GrammarError] = Field(default_factory=list, description="List of grammar/spelling errors")
     
-    # Basic text statistics
-    word_count: int = Field(0, description="Total word count")
-    character_count: int = Field(0, description="Total character count")
-    sentence_count: int = Field(0, description="Total sentence count")
-    
-    # Processing information
-    stats: Optional[ProcessingStats] = Field(None, description="Processing statistics")
-    success: bool = Field(True, description="Whether analysis completed successfully")
-    errors: List[str] = Field(default_factory=list, description="Any errors encountered during processing")
-    
-    class Config:
+    model_config = ConfigDict(
         json_schema_extra = {
             "example": {
-                "text": "Hallo Welt! Das ist ein Test.",
+                "originalText": "Der Lehrer gibt den Schüler das Büch des berühmten Autors.",
                 "language": "de",
-                "timestamp": "2024-01-15T10:30:00Z",
-                "spellcheck": {
-                    "misspelled_words": {},
-                    "total_misspelled": 0,
-                    "total_words": 5,
-                    "accuracy": 100.0
-                },
-                "spacy_tokens": [
+                "sentences": [
                     {
-                        "text": "Hallo",
-                        "lemma": "Hallo",
-                        "pos": "INTJ",
-                        "tag": "ITJ",
-                        "morph": {"Polarity": "Pos"},
-                        "processor": "spacy"
+                        "text": "Der Lehrer gibt den Schüler das Büch des berühmten Autors.",
+                        "tokens": [
+                            {
+                                "text": "Der",
+                                "startChar": 0,
+                                "endChar": 3,
+                                "pos": "DET",
+                                "lemma": "der",
+                                "morphology": {
+                                    "Case": "Nom",
+                                    "Gender": "Masc",
+                                    "Number": "Sing",
+                                    "additional_features": {}
+                                },
+                                "dependency": {
+                                    "relation": "det",
+                                    "headTokenIndex": 1
+                                }
+                            }
+                        ]
                     }
                 ],
-                "stanza_tokens": [
+                "errors": [
                     {
-                        "text": "Hallo",
-                        "lemma": "Hallo",
-                        "pos": "INTJ",
-                        "tag": "ITJ",
-                        "head": 2,
-                        "deprel": "discourse",
-                        "processor": "stanza"
+                        "message": "The noun 'Schüler' may require the dative case here.",
+                        "startChar": 17,
+                        "endChar": 24,
+                        "suggestions": ["dem Schüler"],
+                        "ruleId": "GERMAN_CASE_AGREEMENT"
+                    },
+                    {
+                        "message": "Possible spelling mistake found.",
+                        "startChar": 29,
+                        "endChar": 33,
+                        "suggestions": ["Buch"],
+                        "ruleId": "GERMAN_SPELLER_RULE"
                     }
-                ],
-                "word_count": 5,
-                "character_count": 26,
-                "sentence_count": 1,
-                "stats": {
-                    "processing_time_ms": 123.45,
-                    "tokens_processed": 5
-                },
-                "success": True,
-                "errors": []
+                ]
             }
         }
+    )
 
 
 class AnalysisRequest(BaseModel):
     """Request model for language analysis."""
     
     text: str = Field(..., description="Text to analyze", min_length=1, max_length=10000)
-    language: Optional[str] = Field("de", description="Language for analysis")
-    include_spellcheck: bool = Field(True, description="Include spell checking")
-    include_spacy: bool = Field(True, description="Include SpaCy analysis")
-    include_stanza: bool = Field(True, description="Include Stanza analysis")
+    language: str = Field(..., description="Language code for analysis (e.g., 'de', 'en', 'fr', 'es')")
+    include_grammar_check: bool = Field(True, description="Include grammar and spell checking")
+    include_morphological_analysis: bool = Field(True, description="Include detailed morphological analysis")
+    include_dependency_parsing: bool = Field(True, description="Include dependency parsing")
     
-    class Config:
+    model_config = ConfigDict(
         json_schema_extra = {
             "example": {
-                "text": "Hallo Welt! Das ist ein Test.",
+                "text": "Der Lehrer gibt den Schüler das Büch des berühmten Autors.",
                 "language": "de",
-                "include_spellcheck": True,
-                "include_spacy": True,
-                "include_stanza": True
+                "include_grammar_check": True,
+                "include_morphological_analysis": True,
+                "include_dependency_parsing": True
             }
         }
+    )
 
 
 class AnalysisError(BaseModel):
@@ -111,12 +253,13 @@ class AnalysisError(BaseModel):
     processor: Optional[str] = Field(None, description="Processor that failed")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Error timestamp")
     
-    class Config:
+    model_config = ConfigDict(
         json_schema_extra = {
             "example": {
                 "error_type": "ModelLoadError",
-                "error_message": "Failed to load SpaCy model",
-                "processor": "spacy",
+                "error_message": "Failed to load Stanza model for language 'de'",
+                "processor": "stanza",
                 "timestamp": "2024-01-15T10:30:00Z"
             }
         }
+    )

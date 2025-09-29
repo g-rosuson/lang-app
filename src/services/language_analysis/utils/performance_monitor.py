@@ -130,14 +130,14 @@ class PerformanceMonitor:
         # Add to history
         self.request_history.append(request_metrics)
         
-        logger.debug(f"Request completed: {processing_time:.2f}ms, success={success}, cache_hit={cache_hit}")
+        logger.debug(f"Request completed: {request_metrics.processing_time_ms:.2f}ms, success={success}, cache_hit={cache_hit}")
     
     def track_component_time(self, component: str, duration_ms: float) -> None:
         """
         Track processing time for a specific component.
         
         Args:
-            component (str): Name of the component (e.g., 'spacy', 'stanza', 'spellcheck')
+            component (str): Name of the component (e.g., 'stanza', 'language_tool')
             duration_ms (float): Processing time in milliseconds
         """
         self.component_times[component].append(duration_ms)

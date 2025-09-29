@@ -7,7 +7,7 @@ initialization, and PyTorch compatibility fixes.
 
 import torch
 from torch.serialization import add_safe_globals
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from ...logging.logging import get_logger
 
 logger = get_logger(__name__)
@@ -19,9 +19,9 @@ class ModelManager:
     def __init__(self):
         """Initialize the model manager."""
         self._torch_patched = False
-        self._apply_torch_patches()
+        self.__apply_torch_patches()
     
-    def _apply_torch_patches(self) -> None:
+    def __apply_torch_patches(self) -> None:
         """
         Apply PyTorch compatibility patches for Stanza.
         

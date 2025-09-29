@@ -30,9 +30,6 @@ class Settings(BaseSettings):
     max_text_length: int = 10000
     default_language: str = "de"
     
-    # SpaCy Configuration
-    spacy_model: str = "de_core_news_md"
-    
     # Stanza Configuration
     stanza_language: str = "de"
     stanza_processors: str = "tokenize,mwt,pos,lemma,depparse"

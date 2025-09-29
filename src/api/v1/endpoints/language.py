@@ -35,7 +35,7 @@ async def analyze_text(
     
     This endpoint provides comprehensive language analysis including:
     - Spell checking
-    - Token analysis (SpaCy)
+    - Token analysis (Stanza)
     - Advanced linguistic analysis (Stanza)
     - Basic text statistics
     """

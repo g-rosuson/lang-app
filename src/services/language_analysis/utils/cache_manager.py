@@ -47,7 +47,7 @@ class AnalysisCache:
         self.misses = 0
         logger.info(f"Analysis cache initialized: max_size={max_size}, ttl={ttl_seconds}s")
     
-    def _generate_key(self, text: str, language: str = "de") -> str:
+    def __generate_key(self, text: str, language: str = "de") -> str:
         """
         Generate a cache key for the given text and language.
         
@@ -76,7 +76,7 @@ class AnalysisCache:
         Returns:
             Optional[Dict[str, Any]]: Cached result if found and valid, None otherwise
         """
-        key = self._generate_key(text, language)
+        key = self.__generate_key(text, language)
         current_time = time.time()
         
         if key in self.cache:
@@ -109,12 +109,12 @@ class AnalysisCache:
             result (Dict[str, Any]): The analysis result
             language (str): The language code
         """
-        key = self._generate_key(text, language)
+        key = self.__generate_key(text, language)
         current_time = time.time()
         
         # Check if we need to evict entries
         if len(self.cache) >= self.max_size:
-            self._evict_oldest()
+            self.__evict_oldest()
         
         # Store the result
         self.cache[key] = CacheEntry(
@@ -126,7 +126,7 @@ class AnalysisCache:
         
         logger.debug(f"Cache set: {key[:8]}... (size: {len(self.cache)})")
     
-    def _evict_oldest(self) -> None:
+    def __evict_oldest(self) -> None:
         """Evict the least recently accessed entry."""
         if not self.cache:
             return

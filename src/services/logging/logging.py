@@ -80,9 +80,9 @@ def __configure_third_party_loggers() -> None:
     logging.getLogger("transformers").setLevel(logging.WARNING)
     logging.getLogger("tokenizers").setLevel(logging.WARNING)
     
-    # SpaCy
-    logging.getLogger("spacy").setLevel(logging.WARNING)
-    
+    # LanguageTool
+    logging.getLogger("language_tool_python").setLevel(logging.WARNING)
+
     # Stanza
     logging.getLogger("stanza").setLevel(logging.WARNING)
     

@@ -37,9 +37,12 @@ ENV PYTHONPYCACHEPREFIX=/app/__pycache__
 ENV PYTHONDONTWRITEBYTECODE=0
 
 # Install system dependencies
+# gcc, g++: Required for compiling Python packages with C extensions (stanza, etc.)
+# openjdk-21-jre-headless: Required for LanguageTool grammar/spell checking functionality
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    openjdk-21-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -48,8 +51,7 @@ COPY requirements .
 # Install Python dependencies (this layer will be cached if requirements doesn't change)
 RUN pip install --no-cache-dir -r requirements
 
-# Download and cache German models during build
-RUN python -m spacy download de_core_news_md
+# Download and cache Stanza models during build
 RUN python -c "import stanza; stanza.download('de')"
 
 # # Copy custom models

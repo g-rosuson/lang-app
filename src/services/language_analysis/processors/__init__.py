@@ -2,17 +2,14 @@
 Language Analysis Processors
 
 This module contains individual processors for different NLP tools:
-- SpaCy processor for tokenization, POS tagging, and morphology
-- Stanza processor for advanced linguistic analysis and dependency parsing
-- Spell checker processor for German spell checking and corrections
+- Stanza processor for comprehensive linguistic analysis with character positions, morphology, and dependency parsing
+- LanguageTool processor for grammar and spell checking with error extraction
 """
 
-from .spacy_processor import SpaCyProcessor
 from .stanza_processor import StanzaProcessor
-from .spell_checker import SpellCheckerProcessor
+from .language_tool_processor import LanguageToolProcessor
 
 __all__ = [
-    "SpaCyProcessor",
     "StanzaProcessor", 
-    "SpellCheckerProcessor"
+    "LanguageToolProcessor"
 ]

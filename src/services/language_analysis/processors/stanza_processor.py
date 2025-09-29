@@ -1,22 +1,23 @@
 """
 Stanza Processor
 
-This module provides Stanza-based advanced linguistic analysis including
-dependency parsing, POS tagging, and lemmatization for text.
+This module provides Stanza-based comprehensive linguistic analysis including
+tokenization with character positions, POS tagging, lemmatization, morphological
+analysis, and dependency parsing for multiple languages.
 """
 
 import time
 from typing import List, Optional, Dict, Any
 import stanza
 
-from ..models.token_analysis import StanzaToken, TokenAnalysis
+from ..models.analysis_result import Token, Sentence, MorphologyFeatures, DependencyRelation
 from ...logging.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 class StanzaProcessor:
-    """Stanza-based advanced linguistic analysis processor."""
+    """Stanza-based comprehensive linguistic analysis processor."""
     
     def __init__(
         self, 
@@ -29,7 +30,7 @@ class StanzaProcessor:
         Initialize the Stanza processor.
         
         Args:
-            language (str): Language code for Stanza
+            language (str): Language code for Stanza (e.g., 'de', 'en', 'fr', 'es')
             processors (str): Comma-separated list of processors
             model_dir (Optional[str]): Directory for Stanza models
             use_gpu (bool): Whether to use GPU for processing
@@ -49,7 +50,7 @@ class StanzaProcessor:
             Exception: If Stanza pipeline initialization fails
         """
         try:
-            logger.info("Loading Stanza pipeline...")
+            logger.info(f"Loading Stanza pipeline for language: {self.language}")
             
             # Prepare pipeline arguments
             pipeline_args = {
@@ -65,25 +66,26 @@ class StanzaProcessor:
             
             self.nlp = stanza.Pipeline(**pipeline_args)
             self._is_loaded = True
-            logger.info("Stanza pipeline loaded successfully")
+            logger.info(f"Stanza pipeline loaded successfully for language: {self.language}")
             
         except Exception as e:
-            logger.error(f"Failed to load Stanza pipeline: {e}")
-            raise Exception(f"Could not initialize Stanza pipeline: {e}")
+            logger.error(f"Failed to load Stanza pipeline for {self.language}: {e}")
+            raise Exception(f"Could not initialize Stanza pipeline for {self.language}: {e}")
     
     def is_loaded(self) -> bool:
         """Check if the model is loaded and ready."""
         return self._is_loaded and self.nlp is not None
     
-    def analyze(self, text: str) -> List[TokenAnalysis]:
+    def analyze_comprehensive(self, text: str) -> List[Sentence]:
         """
-        Perform linguistic analysis using Stanza.
+        Perform comprehensive linguistic analysis using Stanza with character positions,
+        morphological analysis, and dependency parsing.
         
         Args:
             text (str): The text to analyze
             
         Returns:
-            List[TokenAnalysis]: List of token analysis results
+            List[Sentence]: List of sentence analyses with tokens
             
         Raises:
             Exception: If model is not loaded or analysis fails
@@ -99,112 +101,142 @@ class StanzaProcessor:
             
             # Process text with Stanza
             doc = self.nlp(text)
-            result = []
+            sentences = []
             
-            # Extract token information from all sentences
+            # Process each sentence
             for sentence in doc.sentences:
+                tokens = []
+                
+                # Extract token information with character positions
                 for word in sentence.words:
-                    token_data = TokenAnalysis(
-                        text=word.text,
-                        lemma=word.lemma,
-                        pos=word.upos,
-                        tag=word.xpos,
-                        head=word.head,
-                        deprel=word.deprel,
-                        processor="stanza"
+                    # Calculate character positions
+                    start_char, end_char = self.__get_character_positions(text, word.text, word.id)
+                    
+                    # Extract morphological features
+                    morphology = self.__extract_morphology(word)
+                    
+                    # Create dependency relation
+                    dependency = DependencyRelation(
+                        relation=word.deprel,
+                        headTokenIndex=word.head - 1 if word.head > 0 else 0  # Convert to 0-based index
                     )
-                    result.append(token_data)
+                    
+                    # Create token with all information
+                    token = Token(
+                        text=word.text,
+                        startChar=start_char,
+                        endChar=end_char,
+                        pos=word.upos,
+                        lemma=word.lemma,
+                        morphology=morphology,
+                        dependency=dependency
+                    )
+                    tokens.append(token)
+                
+                # Create sentence with tokens
+                sentence_obj = Sentence(
+                    text=sentence.text,
+                    tokens=tokens
+                )
+                sentences.append(sentence_obj)
             
             processing_time = (time.time() - start_time) * 1000
-            logger.debug(f"Stanza analysis completed: {len(result)} tokens processed in {processing_time:.2f}ms")
+            total_tokens = sum(len(s.tokens) for s in sentences)
+            logger.debug(f"Stanza comprehensive analysis completed: {len(sentences)} sentences, {total_tokens} tokens processed in {processing_time:.2f}ms")
             
-            return result
+            return sentences
             
         except Exception as e:
-            logger.error(f"Stanza analysis failed: {e}")
-            raise Exception(f"Stanza analysis failed: {e}")
+            logger.error(f"Stanza comprehensive analysis failed: {e}")
+            raise Exception(f"Stanza comprehensive analysis failed: {e}")
     
-    def analyze_raw(self, text: str) -> List[StanzaToken]:
+    def __get_character_positions(self, text: str, token_text: str, token_id: int) -> tuple[int, int]:
         """
-        Perform linguistic analysis and return raw Stanza tokens.
+        Calculate character positions for a token in the original text.
+        
+        This is a simplified approach. For production use, you might want to use
+        Stanza's built-in character position tracking if available.
         
         Args:
-            text (str): The text to analyze
+            text (str): Original text
+            token_text (str): Token text to find
+            token_id (int): Token ID in the sentence
             
         Returns:
-            List[StanzaToken]: List of raw Stanza token results
+            tuple[int, int]: Start and end character positions
         """
-        if not self.is_loaded():
-            raise Exception("Stanza model not loaded. Call load_model() first.")
+        # This is a simplified implementation
+        # In practice, you might want to use Stanza's character position tracking
+        # or implement a more sophisticated token-to-character mapping
         
-        if not text or not text.strip():
-            return []
+        # Find the token in the text (this is a basic approach)
+        start_pos = text.find(token_text)
+        if start_pos != -1:
+            return start_pos, start_pos + len(token_text)
         
-        try:
-            # Process text with Stanza
-            doc = self.nlp(text)
-            result = []
-            
-            # Extract token information from all sentences
-            for sentence in doc.sentences:
-                for word in sentence.words:
-                    token_data = StanzaToken(
-                        text=word.text,
-                        lemma=word.lemma,
-                        upos=word.upos,
-                        xpos=word.xpos,
-                        head=word.head,
-                        deprel=word.deprel
-                    )
-                    result.append(token_data)
-            
-            logger.debug(f"Stanza raw analysis completed: {len(result)} tokens processed")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Stanza raw analysis failed: {e}")
-            raise Exception(f"Stanza raw analysis failed: {e}")
+        # Fallback: estimate position based on token ID
+        # This is not accurate but provides a reasonable approximation
+        words = text.split()
+        if token_id <= len(words):
+            estimated_start = len(' '.join(words[:token_id-1])) + (1 if token_id > 1 else 0)
+            return estimated_start, estimated_start + len(token_text)
+        
+        return 0, len(token_text)
     
-    def get_dependency_tree(self, text: str) -> List[Dict[str, Any]]:
+    def __extract_morphology(self, word) -> MorphologyFeatures:
         """
-        Extract dependency tree information from text.
+        Extract morphological features from a Stanza word.
         
         Args:
-            text (str): The text to analyze
+            word: Stanza word object
             
         Returns:
-            List[Dict[str, Any]]: List of dependency tree nodes
+            MorphologyFeatures: Extracted morphological features
         """
-        if not self.is_loaded():
-            raise Exception("Stanza model not loaded. Call load_model() first.")
+        # Parse morphological features from Stanza's feats string
+        features = {}
+        additional_features = {}
         
-        if not text or not text.strip():
-            return []
+        if hasattr(word, 'feats') and word.feats:
+            # Stanza provides morphological features as a string like "Case=Nom|Gender=Masc|Number=Sing"
+            for feat in word.feats.split('|'):
+                if '=' in feat:
+                    key, value = feat.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    
+                    # Map common morphological features
+                    if key.lower() in ['case']:
+                        features['Case'] = value
+                    elif key.lower() in ['gender']:
+                        features['Gender'] = value
+                    elif key.lower() in ['number']:
+                        features['Number'] = value
+                    elif key.lower() in ['tense']:
+                        features['Tense'] = value
+                    elif key.lower() in ['person']:
+                        features['Person'] = value
+                    elif key.lower() in ['mood']:
+                        features['Mood'] = value
+                    elif key.lower() in ['voice']:
+                        features['Voice'] = value
+                    elif key.lower() in ['degree']:
+                        features['Degree'] = value
+                    else:
+                        # Store language-specific features
+                        additional_features[key] = value
         
-        try:
-            doc = self.nlp(text)
-            tree_nodes = []
-            
-            for sentence in doc.sentences:
-                for word in sentence.words:
-                    node = {
-                        "id": word.id,
-                        "text": word.text,
-                        "lemma": word.lemma,
-                        "upos": word.upos,
-                        "xpos": word.xpos,
-                        "head": word.head,
-                        "deprel": word.deprel,
-                        "sentence_id": len(tree_nodes)  # Simple sentence tracking
-                    }
-                    tree_nodes.append(node)
-            
-            logger.debug(f"Dependency tree extracted: {len(tree_nodes)} nodes")
-            return tree_nodes
-            
-        except Exception as e:
-            logger.error(f"Dependency tree extraction failed: {e}")
-            return []
+        return MorphologyFeatures(
+            Case=features.get('Case'),
+            Gender=features.get('Gender'),
+            Number=features.get('Number'),
+            Tense=features.get('Tense'),
+            Person=features.get('Person'),
+            Mood=features.get('Mood'),
+            Voice=features.get('Voice'),
+            Degree=features.get('Degree'),
+            additional_features=additional_features
+        )
     
     def get_sentences(self, text: str) -> List[str]:
         """
@@ -285,4 +317,4 @@ class StanzaProcessor:
         if self.nlp is not None:
             self.nlp = None
             self._is_loaded = False
-            logger.info("Stanza model unloaded")
+            logger.info(f"Stanza model unloaded for language: {self.language}")

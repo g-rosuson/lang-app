@@ -1,18 +1,17 @@
 """
 Language Analysis Pipeline
 
-This module provides the main pipeline orchestrator that coordinates all
-NLP processors and utilities for comprehensive text analysis.
+This module provides the main pipeline orchestrator that coordinates Stanza
+and LanguageTool processors for comprehensive text analysis with character
+positions, morphological analysis, dependency parsing, and grammar/spell checking.
 """
 
 import time
 from typing import Optional, Dict, Any, List
-from datetime import datetime
 
-from .models.analysis_result import AnalysisResult, AnalysisRequest, ProcessingStats
-from .processors.spacy_processor import SpaCyProcessor
+from .models.analysis_result import AnalysisResult, AnalysisRequest, GrammarError
 from .processors.stanza_processor import StanzaProcessor
-from .processors.spell_checker import SpellCheckerProcessor
+from .processors.language_tool_processor import LanguageToolProcessor
 from .utils.text_preprocessing import TextPreprocessor
 from .utils.model_manager import ModelManager
 from .utils.cache_manager import get_analysis_cache
@@ -23,7 +22,7 @@ logger = get_logger(__name__)
 
 
 class LanguageAnalysisPipeline:
-    """Main pipeline orchestrator for language analysis."""
+    """Main pipeline orchestrator for comprehensive language analysis."""
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
@@ -41,17 +40,14 @@ class LanguageAnalysisPipeline:
         self.performance_monitor = get_performance_monitor()
         
         # Initialize processors
-        self.spacy_processor = SpaCyProcessor(
-            model_name=self.config.get('spacy_model', 'de_core_news_md')
-        )
         self.stanza_processor = StanzaProcessor(
             language=self.config.get('stanza_language', 'de'),
             processors=self.config.get('stanza_processors', 'tokenize,mwt,pos,lemma,depparse'),
             model_dir=self.config.get('stanza_model_dir'),
             use_gpu=self.config.get('use_gpu', False)
         )
-        self.spell_checker = SpellCheckerProcessor(
-            language=self.config.get('spellcheck_language', 'de')
+        self.language_tool_processor = LanguageToolProcessor(
+            language=self.config.get('language_tool_language', 'de')
         )
         
         self._is_initialized = False
@@ -64,13 +60,12 @@ class LanguageAnalysisPipeline:
         Raises:
             Exception: If initialization fails
         """
-        logger.info("Initializing language analysis pipeline...")
+        logger.info("Initializing comprehensive language analysis pipeline...")
         
         try:
             # Load models in sequence
-            self.__load_spacy_model()
             self.__load_stanza_model()
-            self.__load_spellchecker_model()
+            self.__load_language_tool_model()
             
             self._is_initialized = True
             logger.info("Language analysis pipeline initialized successfully")
@@ -86,13 +81,13 @@ class LanguageAnalysisPipeline:
     
     def analyze(self, request: AnalysisRequest) -> AnalysisResult:
         """
-        Perform comprehensive text analysis.
+        Perform comprehensive text analysis with Stanza and LanguageTool.
         
         Args:
             request (AnalysisRequest): Analysis request parameters
             
         Returns:
-            AnalysisResult: Complete analysis results
+            AnalysisResult: Complete analysis results matching the required JSON structure
             
         Raises:
             Exception: If analysis fails
@@ -112,6 +107,7 @@ class LanguageAnalysisPipeline:
             return AnalysisResult(**cached_result)
         
         start_time = time.time()
+        processing_time = 0.0  # Initialize processing time
         errors = []
         
         try:
@@ -123,88 +119,128 @@ class LanguageAnalysisPipeline:
             if not validation['valid']:
                 raise ValueError(f"Text validation failed: {validation['message']}")
             
-            # Get basic stats
-            basic_stats = self.text_preprocessor.get_basic_stats(processed_text)
-            
-            # Initialize result
+            # Initialize result with required JSON structure
             result = AnalysisResult(
-                text=processed_text,
-                language=request.language or 'de',
-                word_count=basic_stats['word_count'],
-                character_count=basic_stats['character_count'],
-                sentence_count=basic_stats['sentence_count']
+                originalText=processed_text,
+                language=request.language,
+                sentences=[],
+                errors=[]
             )
             
-            # Run analyses based on request
-            if request.include_spellcheck:
+            # Run Stanza analysis for comprehensive linguistic analysis
+            if request.include_morphological_analysis or request.include_dependency_parsing:
                 try:
-                    spellcheck_result = self.spell_checker.check_text(processed_text)
-                    result.spellcheck = spellcheck_result
-                except Exception as e:
-                    logger.error(f"Spell check failed: {e}")
-                    errors.append(f"Spell check failed: {e}")
-            
-            if request.include_spacy:
-                try:
-                    spacy_tokens = self.spacy_processor.analyze(processed_text)
-                    result.spacy_tokens = spacy_tokens
-                except Exception as e:
-                    logger.error(f"SpaCy analysis failed: {e}")
-                    errors.append(f"SpaCy analysis failed: {e}")
-            
-            if request.include_stanza:
-                try:
-                    stanza_tokens = self.stanza_processor.analyze(processed_text)
-                    result.stanza_tokens = stanza_tokens
+                    logger.info("Running Stanza comprehensive analysis...")
+                    sentences = self.stanza_processor.analyze_comprehensive(processed_text)
+                    result.sentences = sentences
+                    logger.info(f"Stanza analysis completed: {len(sentences)} sentences processed")
                 except Exception as e:
                     logger.error(f"Stanza analysis failed: {e}")
                     errors.append(f"Stanza analysis failed: {e}")
             
+            # Run LanguageTool analysis for grammar and spell checking
+            if request.include_grammar_check:
+                try:
+                    logger.info("Running LanguageTool grammar and spell checking...")
+                    grammar_errors = self.language_tool_processor.check_text(processed_text)
+                    result.errors = grammar_errors
+                    logger.info(f"LanguageTool analysis completed: {len(grammar_errors)} errors found")
+                except Exception as e:
+                    logger.error(f"LanguageTool analysis failed: {e}")
+                    errors.append(f"LanguageTool analysis failed: {e}")
+            
             # Calculate processing time
             processing_time = (time.time() - start_time) * 1000
             
-            # Create processing stats
-            result.stats = ProcessingStats(
-                processing_time_ms=round(processing_time, 2),
-                tokens_processed=len(result.spacy_tokens) + len(result.stanza_tokens),
-                words_checked=result.spellcheck.total_words if result.spellcheck else 0
-            )
-            
-            # Set result status
-            result.success = len(errors) == 0
-            result.errors = errors
+            # Log completion
+            total_tokens = sum(len(s.tokens) for s in result.sentences)
+            logger.info(f"Analysis completed in {processing_time:.2f}ms: {len(result.sentences)} sentences, {total_tokens} tokens, {len(result.errors)} errors")
             
             # Cache the result
             self.cache.set(request.text, result.model_dump(), request.language)
             
             # End performance monitoring
-            self.performance_monitor.end_request(request_metrics, success=result.success, cache_hit=False)
+            self.performance_monitor.end_request(request_metrics, success=len(errors) == 0, cache_hit=False)
             
-            logger.info(f"Analysis completed in {processing_time:.2f}ms with {len(errors)} errors")
             return result
             
         except Exception as e:
             logger.error(f"Analysis failed: {e}")
+            # End performance monitoring even on failure
+            self.performance_monitor.end_request(request_metrics, success=False, cache_hit=False, error_message=str(e))
             raise
     
-    def analyze_simple(self, text: str) -> AnalysisResult:
+    def analyze_simple(self, text: str, language: str = "de") -> AnalysisResult:
         """
         Perform simple analysis with default settings.
         
         Args:
             text (str): Text to analyze
+            language (str): Language code for analysis
             
         Returns:
             AnalysisResult: Analysis results
         """
         request = AnalysisRequest(
             text=text,
-            language='de',
-            include_spellcheck=True,
-            include_spacy=True,
-            include_stanza=True
+            language=language,
+            include_grammar_check=True,
+            include_morphological_analysis=True,
+            include_dependency_parsing=True
         )
         return self.analyze(request)
+    
+    def analyze_grammar_only(self, text: str, language: str = "de") -> List[GrammarError]:
+        """
+        Perform grammar checking only.
+        
+        Args:
+            text (str): Text to analyze
+            language (str): Language code for analysis
+            
+        Returns:
+            List[GrammarError]: Grammar errors found
+        """
+        if not self.is_initialized():
+            raise Exception("Pipeline not initialized. Call initialize() first.")
+        
+        try:
+            # Update language if different
+            if self.language_tool_processor.language != language:
+                self.language_tool_processor.language = language
+                self.language_tool_processor.load_model()
+            
+            return self.language_tool_processor.check_grammar_only(text)
+            
+        except Exception as e:
+            logger.error(f"Grammar analysis failed: {e}")
+            raise
+    
+    def analyze_spelling_only(self, text: str, language: str = "de") -> List[GrammarError]:
+        """
+        Perform spelling checking only.
+        
+        Args:
+            text (str): Text to analyze
+            language (str): Language code for analysis
+            
+        Returns:
+            List[GrammarError]: Spelling errors found
+        """
+        if not self.is_initialized():
+            raise Exception("Pipeline not initialized. Call initialize() first.")
+        
+        try:
+            # Update language if different
+            if self.language_tool_processor.language != language:
+                self.language_tool_processor.language = language
+                self.language_tool_processor.load_model()
+            
+            return self.language_tool_processor.check_spelling_only(text)
+            
+        except Exception as e:
+            logger.error(f"Spelling analysis failed: {e}")
+            raise
     
     def get_pipeline_status(self) -> Dict[str, Any]:
         """
@@ -215,21 +251,43 @@ class LanguageAnalysisPipeline:
         """
         return {
             "initialized": self.is_initialized(),
-            "spacy_loaded": self.spacy_processor.is_loaded(),
             "stanza_loaded": self.stanza_processor.is_loaded(),
-            "spellcheck_loaded": self.spell_checker.is_loaded(),
+            "language_tool_loaded": self.language_tool_processor.is_loaded(),
+            "stanza_language": self.stanza_processor.language,
+            "language_tool_language": self.language_tool_processor.language,
+            "supported_languages": self.language_tool_processor.get_supported_languages(),
             "initialization_errors": self._initialization_errors,
             "system_resources": self.model_manager.check_system_resources()
         }
+    
+    def get_supported_languages(self) -> List[str]:
+        """
+        Get list of supported languages.
+        
+        Returns:
+            List[str]: List of supported language codes
+        """
+        return self.language_tool_processor.get_supported_languages()
+    
+    def is_language_supported(self, language: str) -> bool:
+        """
+        Check if a language is supported.
+        
+        Args:
+            language (str): Language code to check
+            
+        Returns:
+            bool: True if language is supported, False otherwise
+        """
+        return self.language_tool_processor.is_language_supported(language)
     
     def cleanup(self) -> None:
         """Clean up resources and unload models."""
         logger.info("Cleaning up pipeline resources...")
         
         try:
-            self.spacy_processor.unload_model()
             self.stanza_processor.unload_model()
-            self.spell_checker.unload_model()
+            self.language_tool_processor.unload_model()
             self.model_manager.cleanup_resources()
             
             self._is_initialized = False
@@ -239,31 +297,22 @@ class LanguageAnalysisPipeline:
             logger.error(f"Pipeline cleanup failed: {e}")
     
     # Private methods for model loading
-    def __load_spacy_model(self) -> None:
-        """Load SpaCy model."""
-        try:
-            self.spacy_processor.load_model()
-            logger.info("SpaCy model loaded successfully")
-        except Exception as e:
-            logger.error(f"Failed to load SpaCy model: {e}")
-            raise
-    
     def __load_stanza_model(self) -> None:
         """Load Stanza model."""
         try:
             self.stanza_processor.load_model()
-            logger.info("Stanza model loaded successfully")
+            logger.info(f"Stanza model loaded successfully for language: {self.stanza_processor.language}")
         except Exception as e:
             logger.error(f"Failed to load Stanza model: {e}")
             raise
     
-    def __load_spellchecker_model(self) -> None:
-        """Load spell checker model."""
+    def __load_language_tool_model(self) -> None:
+        """Load LanguageTool model."""
         try:
-            self.spell_checker.load_model()
-            logger.info("Spell checker model loaded successfully")
+            self.language_tool_processor.load_model()
+            logger.info(f"LanguageTool loaded successfully for language: {self.language_tool_processor.language}")
         except Exception as e:
-            logger.error(f"Failed to load spell checker model: {e}")
+            logger.error(f"Failed to load LanguageTool model: {e}")
             raise
     
     def get_performance_metrics(self) -> Dict[str, Any]:
