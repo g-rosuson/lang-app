@@ -36,14 +36,30 @@ ENV PYTHONPYCACHEPREFIX=/app/__pycache__
 # Production will override this to 1 to prevent .pyc files for cleaner deployments
 ENV PYTHONDONTWRITEBYTECODE=0
 
+# LanguageTool Hunspell configuration
+# Set the path where Hunspell dictionaries can be found
+ENV LT_HUNSPELL_DICT_PATH=/usr/share/hunspell
+
 # Install system dependencies
 # gcc, g++: Required for compiling Python packages with C extensions (stanza, etc.)
 # openjdk-21-jre-headless: Required for LanguageTool grammar/spell checking functionality
+# libhunspell-dev, hunspell-de-de, hunspell-en-us: Required for Hunspell spell checking
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     openjdk-21-jre-headless \
+    libhunspell-dev \
+    hunspell-de-de \
+    hunspell-en-us \
+    hunspell-fr \
+    hunspell-es \
+    hunspell-it \
     && rm -rf /var/lib/apt/lists/*
+
+# Verify Hunspell dictionaries are installed
+RUN ls -la /usr/share/hunspell/ && \
+    echo "Hunspell dictionaries installed:" && \
+    find /usr/share/hunspell/ -name "*.dic" -o -name "*.aff" | head -10
 
 # Copy requirements first for better caching
 COPY requirements .

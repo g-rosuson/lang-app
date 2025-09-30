@@ -11,6 +11,7 @@ from typing import List, Optional, Dict
 import language_tool_python
 
 from ..models.analysis_result import GrammarError
+from ..models.language_constants import language_constants
 from ...logging.logging import get_logger
 
 logger = get_logger(__name__)
@@ -25,8 +26,9 @@ class LanguageToolProcessor:
         
         Args:
             language (str): Language code for LanguageTool (e.g., 'de', 'en', 'fr', 'es')
+                          Will be converted to proper format (e.g., 'de-DE', 'en-US')
         """
-        self.language = language
+        self.language = language_constants.normalize_language_code(language)
         self.tool: Optional[language_tool_python.LanguageTool] = None
         self._is_loaded = False
         
@@ -40,6 +42,14 @@ class LanguageToolProcessor:
         try:
             logger.info(f"Loading LanguageTool for language: {self.language}")
             
+            # Set up Hunspell path if available
+            import os
+            hunspell_path = os.environ.get('LT_HUNSPELL_DICT_PATH', '/usr/share/hunspell')
+            if os.path.exists(hunspell_path):
+                logger.info(f"Hunspell dictionaries found at: {hunspell_path}")
+            else:
+                logger.warning(f"Hunspell dictionaries not found at: {hunspell_path}")
+            
             # Initialize LanguageTool with the specified language
             self.tool = language_tool_python.LanguageTool(self.language)
             self._is_loaded = True
@@ -47,6 +57,9 @@ class LanguageToolProcessor:
             
         except Exception as e:
             logger.error(f"Failed to load LanguageTool for {self.language}: {e}")
+            if "HunspellLibrary" in str(e):
+                logger.error("Hunspell library error detected. Make sure Hunspell dictionaries are installed.")
+                logger.error("Try: apt-get install libhunspell-dev hunspell-de-de hunspell-en-us")
             raise Exception(f"Could not initialize LanguageTool for {self.language}: {e}")
     
     def is_loaded(self) -> bool:
@@ -297,94 +310,25 @@ class LanguageToolProcessor:
         Get list of supported languages by LanguageTool.
         
         Returns:
-            List[str]: List of supported language codes
+            List[str]: List of supported language codes in proper format (e.g., 'de-DE', 'en-US')
         """
         try:
-            # LanguageTool supports many languages
-            # This is a subset of commonly supported languages
-            supported_languages = [
-                'de',  # German
-                'en',  # English
-                'fr',  # French
-                'es',  # Spanish
-                'it',  # Italian
-                'pt',  # Portuguese
-                'nl',  # Dutch
-                'pl',  # Polish
-                'ru',  # Russian
-                'zh',  # Chinese
-                'ja',  # Japanese
-                'ko',  # Korean
-                'ar',  # Arabic
-                'hi',  # Hindi
-                'sv',  # Swedish
-                'da',  # Danish
-                'no',  # Norwegian
-                'fi',  # Finnish
-                'cs',  # Czech
-                'sk',  # Slovak
-                'hu',  # Hungarian
-                'ro',  # Romanian
-                'bg',  # Bulgarian
-                'hr',  # Croatian
-                'sl',  # Slovenian
-                'et',  # Estonian
-                'lv',  # Latvian
-                'lt',  # Lithuanian
-                'el',  # Greek
-                'tr',  # Turkish
-                'uk',  # Ukrainian
-                'be',  # Belarusian
-                'ca',  # Catalan
-                'eu',  # Basque
-                'gl',  # Galician
-                'af',  # Afrikaans
-                'sq',  # Albanian
-                'az',  # Azerbaijani
-                'mk',  # Macedonian
-                'mt',  # Maltese
-                'is',  # Icelandic
-                'ga',  # Irish
-                'cy',  # Welsh
-                'he',  # Hebrew
-                'fa',  # Persian
-                'th',  # Thai
-                'vi',  # Vietnamese
-                'id',  # Indonesian
-                'ms',  # Malay
-                'tl',  # Filipino
-                'sw',  # Swahili
-                'am',  # Amharic
-                'bn',  # Bengali
-                'gu',  # Gujarati
-                'kn',  # Kannada
-                'ml',  # Malayalam
-                'mr',  # Marathi
-                'ne',  # Nepali
-                'pa',  # Punjabi
-                'si',  # Sinhala
-                'ta',  # Tamil
-                'te',  # Telugu
-                'ur'   # Urdu
-            ]
-            
-            return supported_languages
-            
+            return language_constants.SUPPORTED_LANGUAGES.copy()
         except Exception as e:
             logger.error(f"Failed to get supported languages: {e}")
-            return ['de', 'en']  # Fallback to basic languages
+            return ['de-DE', 'en-US', 'fr-FR', 'es-ES', 'it-IT']  # Fallback to supported languages
     
     def is_language_supported(self, language: str) -> bool:
         """
         Check if a language is supported by LanguageTool.
         
         Args:
-            language (str): Language code to check
+            language (str): Language code to check (supports both short and long format)
             
         Returns:
             bool: True if language is supported, False otherwise
         """
-        return language in self.get_supported_languages()
+        return language_constants.is_language_supported(language)
     
     def get_rule_categories(self) -> Dict[str, List[str]]:
         """

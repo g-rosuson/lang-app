@@ -23,8 +23,8 @@ class TestLanguageAnalysisPipeline:
         pipeline = LanguageAnalysisPipeline(config)
         
         assert pipeline.config == config
-        assert pipeline.stanza_processor.language == 'de'
-        assert pipeline.language_tool_processor.language == 'de'
+        assert pipeline._stanza_processors == {}
+        assert pipeline._language_tool_processors == {}
         assert pipeline._is_initialized is False
         assert pipeline._initialization_errors == []
     
@@ -33,8 +33,8 @@ class TestLanguageAnalysisPipeline:
         pipeline = LanguageAnalysisPipeline()
         
         assert pipeline.config == {}
-        assert pipeline.stanza_processor.language == 'de'
-        assert pipeline.language_tool_processor.language == 'de'
+        assert pipeline._stanza_processors == {}
+        assert pipeline._language_tool_processors == {}
         assert pipeline._is_initialized is False
         assert pipeline._initialization_errors == []
     
@@ -51,44 +51,14 @@ class TestLanguageAnalysisPipeline:
         
         assert pipeline.is_initialized() is True
     
-    @patch.object(LanguageAnalysisPipeline, '_LanguageAnalysisPipeline__load_stanza_model')
-    @patch.object(LanguageAnalysisPipeline, '_LanguageAnalysisPipeline__load_language_tool_model')
-    def test_initialize_success(self, mock_load_lt, mock_load_stanza):
+    def test_initialize_success(self):
         """Test successful pipeline initialization."""
         pipeline = LanguageAnalysisPipeline()
         
         pipeline.initialize()
         
-        mock_load_stanza.assert_called_once()
-        mock_load_lt.assert_called_once()
         assert pipeline._is_initialized is True
-    
-    @patch.object(LanguageAnalysisPipeline, '_LanguageAnalysisPipeline__load_stanza_model')
-    def test_initialize_stanza_failure(self, mock_load_stanza):
-        """Test pipeline initialization failure due to Stanza."""
-        pipeline = LanguageAnalysisPipeline()
-        mock_load_stanza.side_effect = Exception("Stanza loading failed")
-        
-        with pytest.raises(Exception, match="Stanza loading failed"):
-            pipeline.initialize()
-        
-        assert pipeline._is_initialized is False
-        assert len(pipeline._initialization_errors) == 1
-        assert "Stanza loading failed" in pipeline._initialization_errors[0]
-    
-    @patch.object(LanguageAnalysisPipeline, '_LanguageAnalysisPipeline__load_stanza_model')
-    @patch.object(LanguageAnalysisPipeline, '_LanguageAnalysisPipeline__load_language_tool_model')
-    def test_initialize_language_tool_failure(self, mock_load_lt, mock_load_stanza):
-        """Test pipeline initialization failure due to LanguageTool."""
-        pipeline = LanguageAnalysisPipeline()
-        mock_load_lt.side_effect = Exception("LanguageTool loading failed")
-        
-        with pytest.raises(Exception, match="LanguageTool loading failed"):
-            pipeline.initialize()
-        
-        assert pipeline._is_initialized is False
-        assert len(pipeline._initialization_errors) == 1
-        assert "LanguageTool loading failed" in pipeline._initialization_errors[0]
+        assert len(pipeline._initialization_errors) == 0
     
     def test_analyze_not_initialized(self):
         """Test analyze raises exception when pipeline not initialized."""
@@ -104,12 +74,14 @@ class TestLanguageAnalysisPipeline:
         pipeline = LanguageAnalysisPipeline()
         mock_is_initialized.return_value = True
         
-        # Mock processors
-        with patch.object(pipeline.stanza_processor, 'analyze_comprehensive') as mock_stanza:
-            with patch.object(pipeline.language_tool_processor, 'check_text') as mock_lt:
-                mock_stanza.return_value = []
-                mock_lt.return_value = []
-                
+        # Mock the dynamic processor creation methods
+        mock_stanza_processor = Mock()
+        mock_language_tool_processor = Mock()
+        mock_stanza_processor.analyze_comprehensive.return_value = []
+        mock_language_tool_processor.check_text.return_value = []
+        
+        with patch.object(pipeline, '_LanguageAnalysisPipeline__get_stanza_processor', return_value=mock_stanza_processor):
+            with patch.object(pipeline, '_LanguageAnalysisPipeline__get_language_tool_processor', return_value=mock_language_tool_processor):
                 request = AnalysisRequest(
                     text="Der Lehrer gibt den Schüler das Büch des berühmten Autors.",
                     language="de",
@@ -124,6 +96,84 @@ class TestLanguageAnalysisPipeline:
                 assert result.language == "de"
                 assert result.sentences == []
                 assert result.errors == []
+    
+    def test_get_stanza_language_code_conversion(self):
+        """Test language code conversion for Stanza."""
+        pipeline = LanguageAnalysisPipeline()
+        
+        # Test short code remains unchanged
+        assert pipeline._LanguageAnalysisPipeline__get_stanza_language_code("de") == "de"
+        assert pipeline._LanguageAnalysisPipeline__get_stanza_language_code("en") == "en"
+        
+        # Test full code conversion to short
+        assert pipeline._LanguageAnalysisPipeline__get_stanza_language_code("de-DE") == "de"
+        assert pipeline._LanguageAnalysisPipeline__get_stanza_language_code("en-US") == "en"
+        assert pipeline._LanguageAnalysisPipeline__get_stanza_language_code("fr-FR") == "fr"
+    
+    @patch('src.services.language_analysis.processors.stanza_processor.StanzaProcessor')
+    def test_get_stanza_processor_caching(self, mock_stanza_class):
+        """Test that Stanza processors are cached correctly."""
+        pipeline = LanguageAnalysisPipeline()
+        mock_processor = Mock()
+        mock_processor.is_loaded.return_value = True
+        mock_stanza_class.return_value = mock_processor
+        
+        # First call should create new processor
+        processor1 = pipeline._LanguageAnalysisPipeline__get_stanza_processor("de")
+        
+        # Second call should return cached processor
+        processor2 = pipeline._LanguageAnalysisPipeline__get_stanza_processor("de")
+        
+        assert processor1 is processor2
+        assert "de" in pipeline._stanza_processors
+        mock_stanza_class.assert_called_once()
+    
+    @patch('src.services.language_analysis.processors.language_tool_processor.LanguageToolProcessor')
+    def test_get_language_tool_processor_caching(self, mock_lt_class):
+        """Test that LanguageTool processors are cached correctly."""
+        pipeline = LanguageAnalysisPipeline()
+        mock_processor = Mock()
+        mock_processor.is_loaded.return_value = True
+        mock_lt_class.return_value = mock_processor
+        
+        # First call should create new processor
+        processor1 = pipeline._LanguageAnalysisPipeline__get_language_tool_processor("de")
+        
+        # Second call should return cached processor
+        processor2 = pipeline._LanguageAnalysisPipeline__get_language_tool_processor("de")
+        
+        assert processor1 is processor2
+        assert "de-DE" in pipeline._language_tool_processors  # Should be normalized
+        mock_lt_class.assert_called_once()
+    
+    def test_different_languages_create_different_processors(self):
+        """Test that different languages create different processor instances."""
+        pipeline = LanguageAnalysisPipeline()
+        
+        # Mock processors to avoid actual model loading
+        with patch.object(pipeline, '_LanguageAnalysisPipeline__get_stanza_processor') as mock_get_stanza:
+            with patch.object(pipeline, '_LanguageAnalysisPipeline__get_language_tool_processor') as mock_get_lt:
+                mock_stanza_de = Mock()
+                mock_stanza_en = Mock()
+                mock_lt_de = Mock()
+                mock_lt_en = Mock()
+                
+                mock_get_stanza.side_effect = lambda lang: mock_stanza_de if lang == "de" else mock_stanza_en
+                mock_get_lt.side_effect = lambda lang: mock_lt_de if lang == "de" else mock_lt_en
+                
+                pipeline._is_initialized = True
+                
+                # Analyze German text
+                request_de = AnalysisRequest(text="Das ist ein Test.", language="de")
+                result_de = pipeline.analyze(request_de)
+                
+                # Analyze English text
+                request_en = AnalysisRequest(text="This is a test.", language="en")
+                result_en = pipeline.analyze(request_en)
+                
+                # Should have called get methods for both languages
+                assert mock_get_stanza.call_count == 2
+                assert mock_get_lt.call_count == 2
     
     def test_analyze_simple(self):
         """Test analyze_simple method."""
@@ -155,12 +205,13 @@ class TestLanguageAnalysisPipeline:
         pipeline = LanguageAnalysisPipeline()
         pipeline._is_initialized = True
         
-        with patch.object(pipeline.language_tool_processor, 'check_grammar_only') as mock_check:
-            mock_check.return_value = []
-            
+        mock_processor = Mock()
+        mock_processor.check_grammar_only.return_value = []
+        
+        with patch.object(pipeline, '_LanguageAnalysisPipeline__get_language_tool_processor', return_value=mock_processor):
             result = pipeline.analyze_grammar_only("Test text", "de")
             
-            mock_check.assert_called_once_with("Test text")
+            mock_processor.check_grammar_only.assert_called_once_with("Test text")
             assert result == []
     
     def test_analyze_spelling_only_not_initialized(self):
@@ -175,12 +226,13 @@ class TestLanguageAnalysisPipeline:
         pipeline = LanguageAnalysisPipeline()
         pipeline._is_initialized = True
         
-        with patch.object(pipeline.language_tool_processor, 'check_spelling_only') as mock_check:
-            mock_check.return_value = []
-            
+        mock_processor = Mock()
+        mock_processor.check_spelling_only.return_value = []
+        
+        with patch.object(pipeline, '_LanguageAnalysisPipeline__get_language_tool_processor', return_value=mock_processor):
             result = pipeline.analyze_spelling_only("Test text", "de")
             
-            mock_check.assert_called_once_with("Test text")
+            mock_processor.check_spelling_only.assert_called_once_with("Test text")
             assert result == []
     
     def test_get_pipeline_status(self):
@@ -188,73 +240,80 @@ class TestLanguageAnalysisPipeline:
         pipeline = LanguageAnalysisPipeline()
         pipeline._is_initialized = True
         
-        with patch.object(pipeline.stanza_processor, 'is_loaded') as mock_stanza_loaded:
-            with patch.object(pipeline.language_tool_processor, 'is_loaded') as mock_lt_loaded:
-                with patch.object(pipeline.model_manager, 'check_system_resources') as mock_resources:
-                    mock_stanza_loaded.return_value = True
-                    mock_lt_loaded.return_value = True
-                    mock_resources.return_value = {"memory": "8GB"}
-                    
-                    status = pipeline.get_pipeline_status()
-                    
-                    assert status["initialized"] is True
-                    assert status["stanza_loaded"] is True
-                    assert status["language_tool_loaded"] is True
-                    assert status["stanza_language"] == "de"
-                    assert status["language_tool_language"] == "de"
-                    assert "supported_languages" in status
-                    assert "system_resources" in status
+        with patch.object(pipeline.model_manager, 'check_system_resources') as mock_resources:
+            mock_resources.return_value = {"memory": "8GB"}
+            
+            status = pipeline.get_pipeline_status()
+            
+            assert status["initialized"] is True
+            assert status["stanza_status"] == "No processors created"
+            assert status["language_tool_status"] == "No processors created"
+            assert status["cached_stanza_languages"] == []
+            assert status["cached_language_tool_languages"] == []
+            assert "supported_languages" in status
+            assert "system_resources" in status
     
     def test_get_supported_languages(self):
         """Test get_supported_languages method."""
         pipeline = LanguageAnalysisPipeline()
         
-        with patch.object(pipeline.language_tool_processor, 'get_supported_languages') as mock_get_langs:
-            mock_get_langs.return_value = ["de", "en", "fr"]
-            
-            languages = pipeline.get_supported_languages()
-            
-            assert languages == ["de", "en", "fr"]
-            mock_get_langs.assert_called_once()
+        languages = pipeline.get_supported_languages()
+        
+        # Should return the supported languages from language constants
+        assert isinstance(languages, list)
+        assert len(languages) > 0
+        assert "de-DE" in languages
+        assert "en-US" in languages
     
     def test_is_language_supported(self):
         """Test is_language_supported method."""
         pipeline = LanguageAnalysisPipeline()
         
-        with patch.object(pipeline.language_tool_processor, 'is_language_supported') as mock_is_supported:
-            mock_is_supported.return_value = True
-            
-            result = pipeline.is_language_supported("de")
-            
-            assert result is True
-            mock_is_supported.assert_called_once_with("de")
+        # Test supported languages
+        assert pipeline.is_language_supported("de") is True
+        assert pipeline.is_language_supported("de-DE") is True
+        assert pipeline.is_language_supported("en") is True
+        assert pipeline.is_language_supported("en-US") is True
+        
+        # Test unsupported language
+        assert pipeline.is_language_supported("xyz") is False
     
     def test_cleanup(self):
         """Test pipeline cleanup."""
         pipeline = LanguageAnalysisPipeline()
         pipeline._is_initialized = True
         
-        with patch.object(pipeline.stanza_processor, 'unload_model') as mock_stanza_unload:
-            with patch.object(pipeline.language_tool_processor, 'unload_model') as mock_lt_unload:
-                with patch.object(pipeline.model_manager, 'cleanup_resources') as mock_cleanup:
-                    pipeline.cleanup()
-                    
-                    mock_stanza_unload.assert_called_once()
-                    mock_lt_unload.assert_called_once()
-                    mock_cleanup.assert_called_once()
-                    assert pipeline._is_initialized is False
+        # Add some mock processors to the cache
+        mock_stanza_processor = Mock()
+        mock_lt_processor = Mock()
+        pipeline._stanza_processors["de"] = mock_stanza_processor
+        pipeline._language_tool_processors["de-DE"] = mock_lt_processor
+        
+        with patch.object(pipeline.model_manager, 'cleanup_resources') as mock_cleanup:
+            pipeline.cleanup()
+            
+            mock_stanza_processor.unload_model.assert_called_once()
+            mock_lt_processor.unload_model.assert_called_once()
+            mock_cleanup.assert_called_once()
+            assert pipeline._is_initialized is False
+            assert len(pipeline._stanza_processors) == 0
+            assert len(pipeline._language_tool_processors) == 0
     
     def test_cleanup_with_exception(self):
         """Test pipeline cleanup with exception."""
         pipeline = LanguageAnalysisPipeline()
         pipeline._is_initialized = True
         
-        with patch.object(pipeline.stanza_processor, 'unload_model', side_effect=Exception("Cleanup failed")):
-            # Should not raise exception
-            pipeline.cleanup()
-            
-            # The cleanup method catches exceptions and logs them, but _is_initialized remains True due to exception
-            assert pipeline._is_initialized is True
+        # Add mock processor that will raise exception
+        mock_processor = Mock()
+        mock_processor.unload_model.side_effect = Exception("Cleanup failed")
+        pipeline._stanza_processors["de"] = mock_processor
+        
+        # Should not raise exception - cleanup method catches exceptions
+        pipeline.cleanup()
+        
+        # The cleanup method catches exceptions and logs them, but _is_initialized should still be False
+        assert pipeline._is_initialized is False
     
     def test_get_performance_metrics(self):
         """Test get_performance_metrics method."""

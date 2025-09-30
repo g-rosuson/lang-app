@@ -39,23 +39,91 @@ class LanguageAnalysisPipeline:
         self.cache = get_analysis_cache()
         self.performance_monitor = get_performance_monitor()
         
-        # Initialize processors
-        self.stanza_processor = StanzaProcessor(
-            language=self.config.get('stanza_language', 'de'),
-            processors=self.config.get('stanza_processors', 'tokenize,mwt,pos,lemma,depparse'),
-            model_dir=self.config.get('stanza_model_dir'),
-            use_gpu=self.config.get('use_gpu', False)
-        )
-        self.language_tool_processor = LanguageToolProcessor(
-            language=self.config.get('language_tool_language', 'de')
-        )
+        # Processor cache to avoid recreating processors for the same language
+        self._stanza_processors: Dict[str, StanzaProcessor] = {}
+        self._language_tool_processors: Dict[str, LanguageToolProcessor] = {}
         
         self._is_initialized = False
         self._initialization_errors = []
     
+    def __get_stanza_processor(self, language: str) -> StanzaProcessor:
+        """
+        Get or create a Stanza processor for the specified language.
+        
+        Args:
+            language (str): Language code from request (e.g., 'de', 'en', 'de-DE')
+            
+        Returns:
+            StanzaProcessor: Processor for the specified language
+        """
+        # Convert to short code for Stanza
+        short_code = self.__get_stanza_language_code(language)
+        
+        # Check if we already have a processor for this language
+        if short_code not in self._stanza_processors:
+            self._stanza_processors[short_code] = StanzaProcessor(
+                language=short_code,
+                processors=self.config.get('stanza_processors', 'tokenize,mwt,pos,lemma,depparse'),
+                model_dir=self.config.get('stanza_model_dir'),
+                use_gpu=self.config.get('use_gpu', False)
+            )
+        
+        processor = self._stanza_processors[short_code]
+        
+        # Ensure the processor is loaded
+        if not processor.is_loaded():
+            processor.load_model()
+        
+        return processor
+    
+    def __get_language_tool_processor(self, language: str) -> LanguageToolProcessor:
+        """
+        Get or create a LanguageTool processor for the specified language.
+        
+        Args:
+            language (str): Language code from request (e.g., 'de', 'en', 'de-DE')
+            
+        Returns:
+            LanguageToolProcessor: Processor for the specified language
+        """
+        # Use centralized language constants to normalize the language code
+        from .models.language_constants import language_constants
+        normalized_language = language_constants.normalize_language_code(language)
+        
+        # Check if we already have a processor for this language
+        if normalized_language not in self._language_tool_processors:
+            self._language_tool_processors[normalized_language] = LanguageToolProcessor(
+                language=normalized_language
+            )
+        
+        processor = self._language_tool_processors[normalized_language]
+        
+        # Ensure the processor is loaded
+        if not processor.is_loaded():
+            processor.load_model()
+        
+        return processor
+    
+    def __get_stanza_language_code(self, language: str) -> str:
+        """
+        Convert language code to Stanza format (short codes).
+        
+        Args:
+            language (str): Language code (supports both short and long format)
+            
+        Returns:
+            str: Short language code for Stanza (e.g., 'de', 'en', 'fr')
+        """
+        # If already in short format (no '-'), return as-is
+        if '-' not in language:
+            return language.lower()
+        
+        # Convert from full format to short format
+        return language.split('-')[0].lower()
+    
     def initialize(self) -> None:
         """
-        Initialize all processors and load models.
+        Initialize the pipeline infrastructure (models will be loaded dynamically).
         
         Raises:
             Exception: If initialization fails
@@ -63,10 +131,7 @@ class LanguageAnalysisPipeline:
         logger.info("Initializing comprehensive language analysis pipeline...")
         
         try:
-            # Load models in sequence
-            self.__load_stanza_model()
-            self.__load_language_tool_model()
-            
+            # Pipeline infrastructure is ready - processors will be created dynamically
             self._is_initialized = True
             logger.info("Language analysis pipeline initialized successfully")
             
@@ -130,8 +195,9 @@ class LanguageAnalysisPipeline:
             # Run Stanza analysis for comprehensive linguistic analysis
             if request.include_morphological_analysis or request.include_dependency_parsing:
                 try:
-                    logger.info("Running Stanza comprehensive analysis...")
-                    sentences = self.stanza_processor.analyze_comprehensive(processed_text)
+                    logger.info(f"Running Stanza comprehensive analysis for language: {request.language}")
+                    stanza_processor = self.__get_stanza_processor(request.language)
+                    sentences = stanza_processor.analyze_comprehensive(processed_text)
                     result.sentences = sentences
                     logger.info(f"Stanza analysis completed: {len(sentences)} sentences processed")
                 except Exception as e:
@@ -141,8 +207,9 @@ class LanguageAnalysisPipeline:
             # Run LanguageTool analysis for grammar and spell checking
             if request.include_grammar_check:
                 try:
-                    logger.info("Running LanguageTool grammar and spell checking...")
-                    grammar_errors = self.language_tool_processor.check_text(processed_text)
+                    logger.info(f"Running LanguageTool grammar and spell checking for language: {request.language}")
+                    language_tool_processor = self.__get_language_tool_processor(request.language)
+                    grammar_errors = language_tool_processor.check_text(processed_text)
                     result.errors = grammar_errors
                     logger.info(f"LanguageTool analysis completed: {len(grammar_errors)} errors found")
                 except Exception as e:
@@ -205,12 +272,8 @@ class LanguageAnalysisPipeline:
             raise Exception("Pipeline not initialized. Call initialize() first.")
         
         try:
-            # Update language if different
-            if self.language_tool_processor.language != language:
-                self.language_tool_processor.language = language
-                self.language_tool_processor.load_model()
-            
-            return self.language_tool_processor.check_grammar_only(text)
+            language_tool_processor = self.__get_language_tool_processor(language)
+            return language_tool_processor.check_grammar_only(text)
             
         except Exception as e:
             logger.error(f"Grammar analysis failed: {e}")
@@ -231,12 +294,8 @@ class LanguageAnalysisPipeline:
             raise Exception("Pipeline not initialized. Call initialize() first.")
         
         try:
-            # Update language if different
-            if self.language_tool_processor.language != language:
-                self.language_tool_processor.language = language
-                self.language_tool_processor.load_model()
-            
-            return self.language_tool_processor.check_spelling_only(text)
+            language_tool_processor = self.__get_language_tool_processor(language)
+            return language_tool_processor.check_spelling_only(text)
             
         except Exception as e:
             logger.error(f"Spelling analysis failed: {e}")
@@ -249,13 +308,22 @@ class LanguageAnalysisPipeline:
         Returns:
             Dict[str, Any]: Pipeline status information
         """
+        # Get status from cached processors if any exist
+        stanza_status = "No processors created"
+        lt_status = "No processors created"
+        
+        if self._stanza_processors:
+            stanza_status = f"{len(self._stanza_processors)} processors loaded"
+        if self._language_tool_processors:
+            lt_status = f"{len(self._language_tool_processors)} processors loaded"
+        
         return {
             "initialized": self.is_initialized(),
-            "stanza_loaded": self.stanza_processor.is_loaded(),
-            "language_tool_loaded": self.language_tool_processor.is_loaded(),
-            "stanza_language": self.stanza_processor.language,
-            "language_tool_language": self.language_tool_processor.language,
-            "supported_languages": self.language_tool_processor.get_supported_languages(),
+            "stanza_status": stanza_status,
+            "language_tool_status": lt_status,
+            "cached_stanza_languages": list(self._stanza_processors.keys()),
+            "cached_language_tool_languages": list(self._language_tool_processors.keys()),
+            "supported_languages": self.get_supported_languages(),
             "initialization_errors": self._initialization_errors,
             "system_resources": self.model_manager.check_system_resources()
         }
@@ -267,7 +335,8 @@ class LanguageAnalysisPipeline:
         Returns:
             List[str]: List of supported language codes
         """
-        return self.language_tool_processor.get_supported_languages()
+        from .models.language_constants import language_constants
+        return language_constants.SUPPORTED_LANGUAGES.copy()
     
     def is_language_supported(self, language: str) -> bool:
         """
@@ -279,15 +348,24 @@ class LanguageAnalysisPipeline:
         Returns:
             bool: True if language is supported, False otherwise
         """
-        return self.language_tool_processor.is_language_supported(language)
+        from .models.language_constants import language_constants
+        return language_constants.is_language_supported(language)
     
     def cleanup(self) -> None:
         """Clean up resources and unload models."""
         logger.info("Cleaning up pipeline resources...")
         
         try:
-            self.stanza_processor.unload_model()
-            self.language_tool_processor.unload_model()
+            # Clean up all cached processors
+            for processor in self._stanza_processors.values():
+                processor.unload_model()
+            for processor in self._language_tool_processors.values():
+                processor.unload_model()
+            
+            # Clear processor caches
+            self._stanza_processors.clear()
+            self._language_tool_processors.clear()
+            
             self.model_manager.cleanup_resources()
             
             self._is_initialized = False
@@ -296,24 +374,6 @@ class LanguageAnalysisPipeline:
         except Exception as e:
             logger.error(f"Pipeline cleanup failed: {e}")
     
-    # Private methods for model loading
-    def __load_stanza_model(self) -> None:
-        """Load Stanza model."""
-        try:
-            self.stanza_processor.load_model()
-            logger.info(f"Stanza model loaded successfully for language: {self.stanza_processor.language}")
-        except Exception as e:
-            logger.error(f"Failed to load Stanza model: {e}")
-            raise
-    
-    def __load_language_tool_model(self) -> None:
-        """Load LanguageTool model."""
-        try:
-            self.language_tool_processor.load_model()
-            logger.info(f"LanguageTool loaded successfully for language: {self.language_tool_processor.language}")
-        except Exception as e:
-            logger.error(f"Failed to load LanguageTool model: {e}")
-            raise
     
     def get_performance_metrics(self) -> Dict[str, Any]:
         """

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from src.api.v1.api import api_router
 from src.config import settings
 from src.services.logging.logging import get_logger
+from src.services.language_analysis import get_language_analysis_service
 
 logger = get_logger(__name__)
 
@@ -25,7 +26,7 @@ async def lifespan(app: FastAPI):
                 "stanza_processors": settings.stanza_processors,
                 "stanza_model_dir": settings.stanza_model_dir,
                 "use_gpu": settings.use_gpu,
-                "spellcheck_language": settings.spellcheck_language,
+                "language_tool_language": settings.language_tool_language,
                 "pipeline_timeout_seconds": settings.pipeline_timeout_seconds,
                 "enable_parallel_processing": settings.enable_parallel_processing
             }
@@ -50,7 +51,6 @@ async def lifespan(app: FastAPI):
     # Cleanup language analysis service
     if settings.language_analysis_enabled:
         try:
-            from src.services.language_analysis import get_language_analysis_service
             pipeline = get_language_analysis_service()
             pipeline.cleanup()
             logger.info("Language analysis pipeline cleaned up")

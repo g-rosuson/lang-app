@@ -2,6 +2,8 @@
 from pydantic_settings import BaseSettings
 from typing import List, Dict, Optional
 
+from ..services.language_analysis.models.language_constants import language_constants
+
 
 class Settings(BaseSettings):
     """Application configuration settings."""
@@ -17,18 +19,15 @@ class Settings(BaseSettings):
     health_status: str = "healthy"
     
     # Supported languages (currently used in language.py)
-    supported_languages: List[Dict[str, str]] = [
-        {"code": "en", "name": "English"},
-        {"code": "es", "name": "Spanish"},
-        {"code": "fr", "name": "French"},
-        {"code": "de", "name": "German"},
-        {"code": "it", "name": "Italian"}
-    ]
+    @property
+    def supported_languages(self) -> List[Dict[str, str]]:
+        """Get supported languages from centralized constants."""
+        return language_constants.get_supported_languages_for_display()
     
     # Language Analysis Pipeline Configuration
     language_analysis_enabled: bool = True
     max_text_length: int = 10000
-    default_language: str = "de"
+    default_language: str = "de-DE"
     
     # Stanza Configuration
     stanza_language: str = "de"
@@ -36,8 +35,8 @@ class Settings(BaseSettings):
     stanza_model_dir: Optional[str] = None
     use_gpu: bool = False
     
-    # Spell Checker Configuration
-    spellcheck_language: str = "de"
+    # LanguageTool Configuration
+    language_tool_language: str = "de-DE"
     
     # Performance Configuration
     pipeline_timeout_seconds: int = 30
