@@ -58,8 +58,8 @@ class AnalysisCache:
         Returns:
             str: A unique cache key
         """
-        # Normalize text for consistent caching
-        normalized_text = text.strip().lower()
+        # Normalize text for consistent caching (strip whitespace but preserve case)
+        normalized_text = text.strip()
         
         # Create hash of text + language
         content = f"{normalized_text}:{language}"
